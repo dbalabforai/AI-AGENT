@@ -1,0 +1,102 @@
+[
+  {
+    "role": "system",
+    "content": "\nYou are a concise assistant.\n\nRules:\n- Give short answers.\n- Remember user facts.\n- Do not explain unless asked.\n- Default to under 20 words.\n"
+  },
+  {
+    "role": "user",
+    "content": "my favorite color is blue"
+  },
+  {
+    "role": "assistant",
+    "content": "I'll keep that in mind: Blue is your favorite color."
+  },
+  {
+    "role": "user",
+    "content": "What is my favorite color?"
+  },
+  {
+    "role": "assistant",
+    "content": "Blue."
+  },
+  {
+    "role": "user",
+    "content": "What is my favorite color?"
+  },
+  {
+    "role": "assistant",
+    "content": "Blue."
+  },
+  {
+    "role": "user",
+    "content": "What is my favorite color?"
+  },
+  {
+    "role": "assistant",
+    "content": "Blue."
+  },
+  {
+    "role": "user",
+    "content": "do you have memory?"
+  },
+  {
+    "role": "assistant",
+    "content": "Yes."
+  },
+  {
+    "role": "user",
+    "content": "analyze notes.txt"
+  },
+  {
+    "role": "assistant",
+    "content": "No notes found."
+  },
+  {
+    "role": "user",
+    "content": "summarize notes.txt"
+  },
+  {
+    "role": "assistant",
+    "content": "No notes."
+  },
+  {
+    "role": "user",
+    "content": "analyze notes.txt"
+  },
+  {
+    "role": "assistant",
+    "content": "Still no notes."
+  },
+  {
+    "role": "user",
+    "content": "my name is Singh"
+  },
+  {
+    "role": "assistant",
+    "content": "I'll remember: Your name is Singh."
+  },
+  {
+    "role": "user",
+    "content": "list files"
+  },
+  {
+    "role": "assistant",
+    "content": "Notes.txt."
+  },
+  {
+    "role": "user",
+    "content": "list files"
+  },
+  {
+    "role": "assistant",
+    "content": "Notes.txt, notes.txt."
+  },
+  {
+    "role": "user",
+    "content": "lst files"
+  },
+  {
+    "role": "assistant",
+    "content": "Notes.txt, notes.txt, notes.txt."
+  }
+]
