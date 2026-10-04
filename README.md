@@ -1,135 +1,124 @@
 # AI Agent
 
-A lightweight local AI assistant that combines an Ollama chat loop with Model Context Protocol (MCP) tools for working with project files, Git repositories, and GitHub metadata.
+A local command-line AI assistant for everyday project work. It combines Ollama chat with MCP tools for working with files, Git, and GitHub.
 
-## Overview
+> **Runs locally:** the chat model runs through Ollama on your machine. There is no hosted web app at this time.
 
-This project provides an interactive command-line agent that can:
+## What you can do
 
-- read, write, list, and search project files
-- summarize or analyze non-Python files
-- inspect repository status and recent Git history
-- review working-tree changes and preview staged commits
-- query GitHub repository metadata and README content
-- retain short-term conversation memory in `memory.json`
+- Ask the assistant questions and keep conversation history locally.
+- List, search, read, and write project files.
+- Analyze documents, summarize them, or extract action items.
+- Inspect Git status, history, branches, and diffs.
+- Review changes and prepare a commit preview before confirming a commit.
+- Fetch repository details, the README, file list, and recent commits from GitHub.
 
-The entry point is `agent.py`, which wires together the local file MCP server, the Git MCP server, and the GitHub MCP server.
+## Get started
 
-## Repository structure
+### 1. Install prerequisites
 
-- `agent.py` — interactive AI agent CLI
-- `mcp_server.py` — local filesystem utilities exposed through MCP
-- `git_mcp_server.py` — Git status, diff, staging, and commit support
-- `github_mcp_server.py` — GitHub repository metadata and README access
-- `test_mcp.py` — local MCP server smoke tests
-- `test_git_mcp.py` — Git MCP tests
-- `test_github_mcp.py` — GitHub MCP tests
-- `memory.json` — saved assistant memory and conversation state
-- `notes.txt`, `meeting.txt` — example project files used by the agent
+- Python 3.10 or newer
+- [Ollama](https://ollama.com/) installed and running
+- Git installed and available on `PATH`
 
-## Requirements
+### 2. Download dependencies and the model
 
-- Python 3.10+
-- Ollama installed and running
-- An Ollama model available locally, such as `llama3.1`
+From the repository directory, install the Python packages:
 
-Install the Python dependencies:
-
-```bash
-pip install mcp ollama
+```powershell
+py -m pip install mcp ollama
 ```
 
-Pull the model used by the agent:
+Download the model used by the agent:
 
-```bash
+```powershell
 ollama pull llama3.1
 ```
 
-Optional for GitHub access:
+Make sure Ollama is running before starting the agent.
 
-```bash
-export GITHUB_TOKEN="your_github_token"
+### 3. Start the agent
+
+```powershell
+py agent.py
 ```
 
-## Quick start
-
-Run the agent:
-
-```bash
-python agent.py
-```
-
-Then use commands like:
+The command prompt displays the available commands. For example:
 
 ```text
 list files
-search notes
+search project
 read notes.txt
-analyze meeting.txt
+summarize meeting.txt
 git status
-git log
 github repo info
 review changes
-commit changes
 exit
 ```
 
-## Features
+## Agent tools and MCP servers
 
-### Local file tools
+The agent is a Python CLI client. It launches the MCP servers as local subprocesses and calls their tools when you enter a matching command.
 
-The MCP server allows the agent to safely work with non-Python project files inside the repository root.
+**MCP** (Model Context Protocol) is a standard way for an AI application to call tools provided by separate servers. In this project, each server exposes a focused set of capabilities:
 
-Supported operations include:
+| Server | What it provides |
+| --- | --- |
+| `mcp_server.py` (`local-files`) | Lists and searches project files, and reads or writes supported files. It excludes Python files and `memory.json`. |
+| `git_mcp_server.py` (`git-tools`) | Reports repository state and history, shows diffs, and stages or commits reviewed changes. |
+| `github_mcp_server.py` (`github-tools`) | Reads GitHub repository metadata, README content, the default-branch file list, and recent commits. |
 
-- `list files`
-- `search <text>`
-- `read <file>`
-- `write <file>: <content>`
-- `analyze <file>`
-- `summarize <file>`
-- `extract_tasks <file>`
+The local file and Git servers operate on the repository containing the project. GitHub tools are configured for `dbalabforai/AI-AGENT`.
 
-Python files are intentionally excluded from these file-system tools.
+## Commands
 
-### Git workflow
+### Files
 
-The Git MCP layer exposes commands such as:
+| Command | Description |
+| --- | --- |
+| `list files` | List supported files in the project directory. |
+| `search <text>` | Find text in supported project files. |
+| `read <file>` | Display a file's contents. |
+| `write <file>: <content>` | Write text to a project file. |
+| `analyze <file>` | Identify purpose, key facts, dates, and open items. |
+| `summarize <file>` | Summarize a document in concise bullets. |
+| `extract_tasks <file>` | Extract action items from a document. |
 
-- `git status`
-- `git log`
-- `git branch`
-- `git diff`
-- `git diff full`
-- `review changes`
-- `commit changes`
+### Git
 
-The review flow checks working-tree changes, summarizes them, and prepares a staged commit preview before confirmation.
+| Command | Description |
+| --- | --- |
+| `git status`, `git log`, `git branch` | Inspect repository state, recent commits, or the current branch. |
+| `git diff`, `git diff full` | View a compact change summary or full patch. |
+| `review changes` | Summarize working-tree changes and suggest a commit message. |
+| `commit changes` | Stage the reviewed paths and show a commit preview. Confirm with `yes` or cancel with `no`. |
 
-### GitHub integration
+### GitHub
 
-The GitHub MCP server is configured for the repository:
+| Command | Description |
+| --- | --- |
+| `github repo info` | Show basic repository metadata. |
+| `github readme` | Read the repository README. |
+| `github list files` | List files on the default branch. |
+| `github latest commits` | Show recent commits on the default branch. |
 
-- `dbalabforai/AI-AGENT`
+GitHub's public repository data can be read without a token. To authenticate API requests or access data requiring authentication, set `GITHUB_TOKEN` in the environment before launching the agent. Do not put the token in source code or commit it.
 
-It can read:
+## Project files
 
-- repository metadata
-- README content
-- file list from the default branch
-- latest commit summaries
+- `agent.py` — interactive CLI and MCP client
+- `mcp_server.py` — local file tools
+- `git_mcp_server.py` — Git tools
+- `github_mcp_server.py` — GitHub tools
+- `test_mcp.py`, `test_git_mcp.py`, `test_github_mcp.py` — MCP server tool-listing smoke checks
+- `memory.json` — locally saved chat history; generated or updated when chatting
 
-## Safety and constraints
+## Safety notes
 
-- File access is restricted to the project directory.
-- Access to `memory.json` is blocked from the local file MCP tool.
-- Git paths are validated before staging to prevent unsafe repository-relative path manipulation.
-- GitHub metadata calls require network access and optionally a personal access token via `GITHUB_TOKEN`.
+- File tools are restricted to the project directory; they cannot access `memory.json` or `.py` files.
+- Git staging and commit operations are limited to reviewed, changed paths and require confirmation before committing.
+- Conversation history is stored locally in `memory.json`.
 
-## Notes
+## Current scope
 
-This project is designed as a local, educational, and automation-oriented assistant. It is intentionally compact and does not aim to replace a full production chat platform or agent framework.
-
-## License
-
-This project does not currently declare a license file. If you intend to distribute or reuse it publicly, add an explicit license before publication.
+This project currently provides a local CLI, not a public website or hosted service. Anyone who wants to use it needs to install the prerequisites and run it on their own machine.
