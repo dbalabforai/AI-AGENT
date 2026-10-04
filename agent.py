@@ -15,6 +15,9 @@ from ollama import chat
 
 MEMORY_FILE = "memory.json"
 MAX_MESSAGES = 100
+reviewed_changes = []
+review_summary = ""
+pending_commit = None
 
 SYSTEM_PROMPT = {
     "role": "system",
@@ -155,6 +158,217 @@ def git_branch():
         "git_branch"
     )
     
+
+def summarize_git_changes(changes, diff_summary):
+    counts = {
+        "added": 0,
+        "modified": 0,
+        "deleted": 0,
+        "renamed": 0,
+        "other": 0,
+    }
+    for change in changes:
+        code = change["code"]
+        if code == "??" or "A" in code:
+            counts["added"] += 1
+        elif "D" in code:
+            counts["deleted"] += 1
+        elif "R" in code or "C" in code:
+            counts["renamed"] += 1
+        elif "M" in code:
+            counts["modified"] += 1
+        else:
+            counts["other"] += 1
+
+    details = [
+        f"{count} {label}"
+        for label, count in counts.items()
+        if count
+    ]
+    summary = f"{len(changes)} changed files: {', '.join(details)}."
+    if diff_summary and diff_summary != "(no tracked changes)":
+        summary += f"\nTracked diff:\n{diff_summary}"
+
+    path_names = " ".join(
+        path.lower()
+        for change in changes
+        for path in (change["path"], change.get("original_path"))
+        if path
+    )
+    if "github" in path_names and "git" in path_names:
+        commit_message = "Add GitHub support and improve Git tools"
+    elif "github" in path_names:
+        commit_message = "Update GitHub integration"
+    elif "git" in path_names:
+        commit_message = "Update Git tools"
+    elif counts["added"] and not counts["modified"] and not counts["deleted"]:
+        commit_message = "Add project files"
+    elif counts["deleted"] and not counts["added"] and not counts["modified"]:
+        commit_message = "Remove project files"
+    else:
+        commit_message = "Update project files"
+    return summary, commit_message
+
+
+def changed_paths(changes):
+    paths = []
+    for change in changes:
+        for path in (change["path"], change.get("original_path")):
+            if path and path not in paths:
+                paths.append(path)
+    return paths
+
+
+def format_changed_files(changes):
+    groups = {
+        "Added": [],
+        "Modified": [],
+        "Deleted": [],
+        "Renamed": [],
+        "Other": [],
+    }
+    for change in changes:
+        code = change["code"]
+        path = change["path"]
+        if code == "??" or "A" in code:
+            groups["Added"].append(path)
+        elif "D" in code:
+            groups["Deleted"].append(path)
+        elif "R" in code or "C" in code:
+            original = change.get("original_path")
+            groups["Renamed"].append(f"{original} -> {path}")
+        elif "M" in code:
+            groups["Modified"].append(path)
+        else:
+            groups["Other"].append(f"{code} {path}")
+
+    return "\n".join(
+        f"{label}:\n" + "\n".join(f"- {path}" for path in paths)
+        for label, paths in groups.items()
+        if paths
+    )
+
+
+def review_working_tree():
+    global reviewed_changes, review_summary
+
+    result = call_git_mcp_tool("git_changed_files")
+    if result.startswith("Error:"):
+        return result
+    try:
+        changes = json.loads(result)
+    except json.JSONDecodeError as error:
+        return f"Error: Could not read changed paths from Git MCP: {error}"
+
+    if not changes:
+        reviewed_changes = []
+        review_summary = ""
+        return "No changes to review."
+
+    diff = call_git_mcp_tool("git_diff")
+    if diff.startswith("Error:"):
+        return diff
+
+    summary, commit_message = summarize_git_changes(changes, diff)
+
+    reviewed_changes = changes
+    review_summary = summary
+    return (
+        "Changes detected:\n"
+        f"{format_changed_files(changes)}\n\n"
+        f"Summary:\n{summary}\n\n"
+        f'Suggested commit message:\n"{commit_message}"\n\n'
+        "Use 'commit changes' to stage only these reviewed paths and preview them."
+    )
+
+
+def prepare_commit():
+    global pending_commit
+
+    if not reviewed_changes:
+        return "Run 'review changes' first; there are no approved paths to stage."
+
+    paths = changed_paths(reviewed_changes)
+    staged_summary = call_git_mcp_tool(
+        "git_stage_paths",
+        {"paths": paths},
+    )
+    if staged_summary.startswith("Error:"):
+        rollback = call_git_mcp_tool(
+            "git_unstage_paths",
+            {"paths": paths},
+        )
+        return f"{staged_summary}\nStaging rollback: {rollback}"
+    if staged_summary == "(no changes were staged)":
+        return "No changes were staged. Run 'review changes' again."
+
+    summary, commit_message = summarize_git_changes(
+        reviewed_changes,
+        staged_summary,
+    )
+    staged_fingerprint = call_git_mcp_tool("git_staged_fingerprint")
+    if staged_fingerprint.startswith("Error:"):
+        rollback = call_git_mcp_tool(
+            "git_unstage_paths",
+            {"paths": paths},
+        )
+        return f"{staged_fingerprint}\nStaging rollback: {rollback}"
+
+    pending_commit = {
+        "paths": paths,
+        "message": commit_message,
+        "fingerprint": staged_fingerprint,
+    }
+    return (
+        "Commit preview:\n"
+        f"Files staged:\n{format_changed_files(reviewed_changes)}\n\n"
+        f"{staged_summary}\n\n"
+        f"Summary:\n{summary}\n\n"
+        f'Suggested commit:\n"{commit_message}"\n\n'
+        "Confirm commit? Reply yes or no."
+    )
+
+
+async def _call_github_mcp_tool(tool_name, arguments):
+    server_path = Path(__file__).with_name(
+        "github_mcp_server.py"
+    ).resolve()
+    server_env = {}
+    if os.environ.get("GITHUB_TOKEN"):
+        server_env["GITHUB_TOKEN"] = os.environ["GITHUB_TOKEN"]
+
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=[str(server_path)],
+        env=server_env,
+    )
+
+    async with stdio_client(params) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            result = await session.call_tool(tool_name, arguments)
+            text = "\n".join(
+                item.text
+                for item in result.content
+                if hasattr(item, "text")
+            )
+            if result.isError:
+                return f"Error: {text}"
+            return text
+
+
+def call_github_mcp_tool(tool_name):
+    try:
+        return asyncio.run(
+            _call_github_mcp_tool(tool_name, {})
+        )
+    except Exception as error:
+        details = "".join(
+            traceback.format_exception(error)
+        ).strip()
+        return f"Error: GitHub MCP:\n{details}"
+
+
 def call_mcp_tool(tool_name, arguments):
     try:
         return asyncio.run(
@@ -296,7 +510,7 @@ TOOLS = {
     "extract_tasks"
 }
 
-print("""
+HELP_TEXT = """
 AI Agent Started
 
 Filesystem:
@@ -314,9 +528,23 @@ Git:
   git status
   git log
   git branch
+  git diff
+  git diff full
+  git remote
+  git last commit
+  review changes
+  commit changes
+
+GitHub (dbalabforai/AI-AGENT):
+  github repo info
+  github readme
+  github list files
+  github latest commits
 
 Type 'exit' to quit.
-""")
+"""
+
+print(HELP_TEXT)
 
 # --------------------------------------------------
 # Main Loop
@@ -324,13 +552,71 @@ Type 'exit' to quit.
 
 while True:
 
-    user_input = input("You: ").strip()
+    try:
+        user_input = input("You: ").strip()
+    except EOFError:
+        if pending_commit is not None:
+            rollback = call_git_mcp_tool(
+                "git_unstage_paths",
+                {"paths": pending_commit["paths"]},
+            )
+            print(f"\nAgent:\nInput closed; commit cancelled.\n{rollback}\n")
+        break
+
+    if pending_commit is not None:
+        if user_input.lower() == "yes":
+            result = call_git_mcp_tool(
+                "git_commit",
+                {
+                    "message": pending_commit["message"],
+                    "paths": pending_commit["paths"],
+                    "expected_diff_hash": pending_commit["fingerprint"],
+                },
+            )
+            print(f"\nAgent:\n{result}\n")
+            if not result.startswith("Error:"):
+                pending_commit = None
+                reviewed_changes = []
+        elif user_input.lower() == "no":
+            result = call_git_mcp_tool(
+                "git_unstage_paths",
+                {"paths": pending_commit["paths"]},
+            )
+            print(f"\nAgent:\nCommit cancelled.\n{result}\n")
+            if not result.startswith("Error:"):
+                pending_commit = None
+                reviewed_changes = []
+        elif user_input.lower() == "exit":
+            result = call_git_mcp_tool(
+                "git_unstage_paths",
+                {"paths": pending_commit["paths"]},
+            )
+            print(f"\nAgent:\nCommit cancelled.\n{result}\n")
+            if not result.startswith("Error:"):
+                pending_commit = None
+                reviewed_changes = []
+                break
+        else:
+            print("\nAgent:\nPlease reply yes or no to the commit preview.\n")
+        continue
 
     if user_input.lower() == "exit":
         break
 
     normalized_input = " ".join(user_input.lower().split())
     parts = user_input.split(maxsplit=2)
+
+    if normalized_input in {"show tools", "list tools"}:
+        print(f"\n{HELP_TEXT}")
+        continue
+
+    if normalized_input == "review changes":
+        print(f"\nAgent:\n{review_working_tree()}\n")
+        continue
+
+    if normalized_input == "commit changes":
+        print(f"\nAgent:\n{prepare_commit()}\n")
+        continue
 
     # --------------------------------------------------
     # list_files
@@ -456,7 +742,51 @@ while True:
         print(git_branch())
         print()
 
-        continue    
+        continue
+
+    git_commands = {
+        "git remote": "git_remote",
+        "git last commit": "git_last_commit",
+    }
+    if normalized_input == "git diff":
+        print("\nAgent:")
+        print(call_git_mcp_tool("git_diff"))
+        print()
+        continue
+
+    if normalized_input == "git diff full":
+        print("\nAgent:")
+        print(call_git_mcp_tool("git_diff", {"full": True}))
+        print()
+        continue
+
+    git_tool = git_commands.get(normalized_input)
+    if git_tool:
+        print("\nAgent:")
+        print(call_git_mcp_tool(git_tool))
+        print()
+        continue
+
+    # --------------------------------------------------
+    # GitHub Commands
+    # --------------------------------------------------
+
+    github_commands = {
+        "github repo info": "github_repo_info",
+        "github_repo_info": "github_repo_info",
+        "github readme": "github_readme",
+        "github_readme": "github_readme",
+        "github list files": "github_list_files",
+        "github_list_files": "github_list_files",
+        "github latest commits": "github_latest_commits",
+        "github_latest_commits": "github_latest_commits",
+    }
+    github_tool = github_commands.get(normalized_input)
+    if github_tool:
+        print("\nAgent:")
+        print(call_github_mcp_tool(github_tool))
+        print()
+        continue
 
     # --------------------------------------------------
     # Normal Chat

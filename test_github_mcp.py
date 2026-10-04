@@ -5,7 +5,7 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-SERVER = Path(__file__).with_name("git_mcp_server.py")
+SERVER = Path(__file__).with_name("github_mcp_server.py")
 
 
 async def main():
@@ -19,7 +19,7 @@ async def main():
             await session.initialize()
             result = await session.list_tools()
 
-            print("MCP Server: git-tools")
+            print("MCP Server: github-tools")
             print(f"Available tools ({len(result.tools)}):")
 
             for tool in result.tools:
