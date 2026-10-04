@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import sys
+import traceback
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
@@ -76,7 +77,84 @@ async def _call_mcp_tool(tool_name, arguments):
 
             return text
 
+# --------------------------------------------------
+# Git MCP Client
+# --------------------------------------------------
 
+async def _call_git_mcp_tool(tool_name, arguments):
+    server_path = Path(__file__).with_name(
+        "git_mcp_server.py"
+    ).resolve()
+
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=[str(server_path)],
+    )
+
+    async with stdio_client(params) as (
+        read_stream,
+        write_stream,
+    ):
+        async with ClientSession(
+            read_stream,
+            write_stream,
+        ) as session:
+
+            await session.initialize()
+
+            result = await session.call_tool(
+                tool_name,
+                arguments
+            )
+
+            text = "\n".join(
+                item.text
+                for item in result.content
+                if hasattr(item, "text")
+            )
+
+            if result.isError:
+                return f"Error: {text}"
+
+            return text
+
+
+def call_git_mcp_tool(tool_name, arguments=None):
+
+    if arguments is None:
+        arguments = {}
+
+    try:
+        return asyncio.run(
+            _call_git_mcp_tool(
+                tool_name,
+                arguments,
+            )
+        )
+    except Exception as error:
+        details = "".join(
+            traceback.format_exception(error)
+        ).strip()
+        return f"Error: Git MCP:\n{details}"
+
+
+def git_status():
+    return call_git_mcp_tool(
+        "git_status"
+    )
+
+
+def git_log():
+    return call_git_mcp_tool(
+        "git_log"
+    )
+
+
+def git_branch():
+    return call_git_mcp_tool(
+        "git_branch"
+    )
+    
 def call_mcp_tool(tool_name, arguments):
     try:
         return asyncio.run(
@@ -221,8 +299,8 @@ TOOLS = {
 print("""
 AI Agent Started
 
-Commands:
-  list_files
+Filesystem:
+  list files
   search <text>
 
   read <file>
@@ -231,6 +309,11 @@ Commands:
   analyze <file>
   summarize <file>
   extract_tasks <file>
+
+Git:
+  git status
+  git log
+  git branch
 
 Type 'exit' to quit.
 """)
@@ -346,6 +429,34 @@ while True:
             print("\nAgent:\nUsage: read <file>\n")
 
         continue
+        
+        # --------------------------------------------------
+    # Git Commands
+    # --------------------------------------------------
+
+    if user_input.lower() == "git status":
+
+        print("\nAgent:")
+        print(git_status())
+        print()
+
+        continue
+
+    if user_input.lower() == "git log":
+
+        print("\nAgent:")
+        print(git_log())
+        print()
+
+        continue
+
+    if user_input.lower() == "git branch":
+
+        print("\nAgent:")
+        print(git_branch())
+        print()
+
+        continue    
 
     # --------------------------------------------------
     # Normal Chat
