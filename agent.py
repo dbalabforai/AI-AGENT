@@ -282,6 +282,66 @@ def review_working_tree():
     )
 
 
+def review_github_changes():
+    review = review_working_tree()
+    if review.startswith("Error:"):
+        return review
+
+    sync_status = call_git_mcp_tool("git_sync_status")
+    if sync_status.startswith("Error:"):
+        return sync_status
+    try:
+        status = json.loads(sync_status)
+    except json.JSONDecodeError as error:
+        return f"Error: Could not read Git upstream status: {error}"
+
+    branch = status.get("branch")
+    upstream = status.get("upstream")
+    ahead = status.get("ahead")
+    behind = status.get("behind")
+    if not isinstance(ahead, int) or not isinstance(behind, int):
+        return "Error: Git upstream status returned invalid commit counts."
+
+    if not upstream:
+        remote_guidance = (
+            "No upstream branch is configured, so I cannot determine whether "
+            "local commits need pushing. After committing, configure an upstream "
+            "and push manually, for example: git push -u origin "
+            f"{branch or '<branch>'}."
+        )
+    elif behind:
+        remote_guidance = (
+            f"Your branch is {behind} commit(s) behind {upstream}. Fetch and "
+            "reconcile with the remote before pushing."
+        )
+        if ahead:
+            remote_guidance += f" It is also {ahead} commit(s) ahead."
+    elif ahead:
+        upstream_parts = upstream.split("/", 1)
+        push_command = (
+            f"git push {upstream_parts[0]} {upstream_parts[1]}"
+            if len(upstream_parts) == 2
+            else "git push"
+        )
+        remote_guidance = (
+            f"Your branch has {ahead} local commit(s) not on {upstream}. "
+            f"When ready, publish them manually with `{push_command}`."
+        )
+    elif review == "No changes to review.":
+        remote_guidance = (
+            f"No uncommitted changes or known local commits to push to "
+            f"{upstream} (based on the last fetch)."
+        )
+    else:
+        remote_guidance = (
+            f"No local commits are currently ahead of {upstream} (based on the "
+            "last fetch). To commit these changes, use `commit changes`; after "
+            "the commit, run `github review changes` again for the push command."
+        )
+
+    return f"{review}\n\nRemote status:\n{remote_guidance}"
+
+
 def prepare_commit():
     global pending_commit
 
@@ -540,6 +600,7 @@ GitHub (dbalabforai/AI-AGENT):
   github readme
   github list files
   github latest commits
+  github review changes
 
 Type 'exit' to quit.
 """
@@ -770,6 +831,12 @@ while True:
     # --------------------------------------------------
     # GitHub Commands
     # --------------------------------------------------
+
+    if normalized_input == "github review changes":
+        print("\nAgent:")
+        print(review_github_changes())
+        print()
+        continue
 
     github_commands = {
         "github repo info": "github_repo_info",

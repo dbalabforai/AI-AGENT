@@ -357,5 +357,39 @@ async def git_last_commit() -> str:
     )
 
 
+@server.tool()
+async def git_sync_status() -> str:
+    """Return the current branch's upstream and known ahead/behind counts as JSON."""
+
+    output = await run_git_command(
+        ["status", "--porcelain=v2", "--branch"]
+    )
+    if output.startswith("Error:"):
+        return output
+
+    status = {
+        "branch": None,
+        "upstream": None,
+        "ahead": 0,
+        "behind": 0,
+    }
+    for line in output.splitlines():
+        if line.startswith("# branch.head "):
+            status["branch"] = line.removeprefix("# branch.head ")
+        elif line.startswith("# branch.upstream "):
+            status["upstream"] = line.removeprefix("# branch.upstream ")
+        elif line.startswith("# branch.ab "):
+            counts = line.removeprefix("# branch.ab ").split()
+            if len(counts) != 2 or not counts[0].startswith("+") or not counts[1].startswith("-"):
+                return "Error: could not parse Git upstream status."
+            try:
+                status["ahead"] = int(counts[0][1:])
+                status["behind"] = int(counts[1][1:])
+            except ValueError:
+                return "Error: could not parse Git upstream commit counts."
+
+    return json.dumps(status, ensure_ascii=True)
+
+
 if __name__ == "__main__":
     server.run(transport="stdio")

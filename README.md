@@ -52,6 +52,7 @@ read notes.txt
 summarize meeting.txt
 git status
 github repo info
+github review changes
 review changes
 exit
 ```
@@ -101,8 +102,11 @@ The local file and Git servers operate on the repository containing the project.
 | `github readme` | Read the repository README. |
 | `github list files` | List files on the default branch. |
 | `github latest commits` | Show recent commits on the default branch. |
+| `github review changes` | Review local changes, suggest how to commit them, and report whether local commits are ahead of the configured remote. It does not commit, fetch, or push. |
 
 GitHub's public repository data can be read without a token. To authenticate API requests or access data requiring authentication, set `GITHUB_TOKEN` in the environment before launching the agent. Do not put the token in source code or commit it.
+
+The remote status uses the local tracking information from the last `git fetch`; it does not contact GitHub or update remote-tracking branches. If changes need committing, use `review changes`, then `commit changes` and confirm with `yes`. The commit is local only. Run `github review changes` again afterward to see whether the branch is ahead and get the appropriate manual push command (for example, `git push origin main`). Nothing is pushed automatically.
 
 ## Project files
 
