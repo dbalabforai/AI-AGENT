@@ -573,6 +573,11 @@ TOOLS = {
 HELP_TEXT = """
 AI Agent Started
 
+Help:
+  help
+  list tools
+  show tools
+
 Filesystem:
   list files
   search <text>
@@ -601,6 +606,15 @@ GitHub (dbalabforai/AI-AGENT):
   github list files
   github latest commits
   github review changes
+
+Change publishing workflow:
+  1. Run 'review changes' to see modified, added, and deleted files.
+  2. Run 'commit changes' and reply 'yes' to create a local commit.
+  3. Run 'github review changes' to check whether local commits need pushing.
+  4. Run the displayed 'git push ...' command in a separate terminal.
+
+The agent does not execute raw 'git add', 'git commit', or 'git push'
+commands typed as chat. For manual Git commands, use a separate terminal.
 
 Type 'exit' to quit.
 """
@@ -667,7 +681,7 @@ while True:
     normalized_input = " ".join(user_input.lower().split())
     parts = user_input.split(maxsplit=2)
 
-    if normalized_input in {"show tools", "list tools"}:
+    if normalized_input in {"help", "show tools", "list tools"}:
         print(f"\n{HELP_TEXT}")
         continue
 
@@ -826,6 +840,21 @@ while True:
         print("\nAgent:")
         print(call_git_mcp_tool(git_tool))
         print()
+        continue
+
+    manual_git_commands = ("git add", "git commit", "git push")
+    if any(
+        normalized_input == command
+        or normalized_input.startswith(f"{command} ")
+        for command in manual_git_commands
+    ):
+        print(
+            "\nAgent:\n"
+            "This raw Git command was not executed. Run it in a separate "
+            "terminal, or use the agent workflow: 'review changes' then "
+            "'commit changes' and confirm with 'yes'. For push status and "
+            "the correct push command, run 'github review changes'.\n"
+        )
         continue
 
     # --------------------------------------------------

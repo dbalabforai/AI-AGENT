@@ -46,6 +46,8 @@ py agent.py
 The command prompt displays the available commands. For example:
 
 ```text
+help
+list tools
 list files
 search project
 read notes.txt
@@ -56,6 +58,8 @@ github review changes
 review changes
 exit
 ```
+
+Enter `help`, `list tools`, or `show tools` at any time to redisplay the full command menu.
 
 ## Agent tools and MCP servers
 
@@ -92,7 +96,7 @@ The local file and Git servers operate on the repository containing the project.
 | `git status`, `git log`, `git branch` | Inspect repository state, recent commits, or the current branch. |
 | `git diff`, `git diff full` | View a compact change summary or full patch. |
 | `review changes` | Summarize working-tree changes and suggest a commit message. |
-| `commit changes` | Stage the reviewed paths and show a commit preview. Confirm with `yes` or cancel with `no`. |
+| `commit changes` | Stage only the paths from the latest review and show a commit preview. Confirm with `yes` or cancel with `no`. This creates a local commit, not a push. |
 
 ### GitHub
 
@@ -107,6 +111,27 @@ The local file and Git servers operate on the repository containing the project.
 GitHub's public repository data can be read without a token. To authenticate API requests or access data requiring authentication, set `GITHUB_TOKEN` in the environment before launching the agent. Do not put the token in source code or commit it.
 
 The remote status uses the local tracking information from the last `git fetch`; it does not contact GitHub or update remote-tracking branches. If changes need committing, use `review changes`, then `commit changes` and confirm with `yes`. The commit is local only. Run `github review changes` again afterward to see whether the branch is ahead and get the appropriate manual push command (for example, `git push origin main`). Nothing is pushed automatically.
+
+### Add, commit, and push workflow
+
+Use the agent's review and commit commands for the safest path:
+
+1. Run `review changes` to inspect the changed files and suggested commit message.
+2. Run `commit changes` to stage only those reviewed files and preview the commit.
+3. Reply `yes` to create the local commit, or `no` to cancel.
+4. Run `github review changes` to check whether local commits are ahead of the remote.
+5. If it displays a push command, run that command in a separate terminal opened in the repository (for example, `git push origin main`).
+
+If you prefer manual Git commands, run them in a separate terminal, not at the agent's chat prompt:
+
+```powershell
+git status
+git add README.md agent.py
+git commit -m "Describe the change"
+git push origin main
+```
+
+Replace the example file names and commit message with the files and change you intend to publish. Use `git add .` only when you intend to stage every changed and untracked file. The agent does not execute raw `git add`, `git commit`, or `git push` commands entered as chat; it will say so rather than claiming the command succeeded.
 
 ## Project files
 
