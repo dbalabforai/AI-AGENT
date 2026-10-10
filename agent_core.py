@@ -7,6 +7,8 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+ERROR_PREFIX = "Error:"
+
 
 # --------------------------------------------------
 # Git MCP
@@ -23,32 +25,28 @@ async def _call_git_mcp(tool_name, arguments):
         args=[str(server_path)],
     )
 
-    async with stdio_client(params) as (
-        read_stream,
-        write_stream,
+    async with (
+        stdio_client(params) as (read_stream, write_stream),
+        ClientSession(read_stream, write_stream) as session,
     ):
-        async with ClientSession(
-            read_stream,
-            write_stream,
-        ) as session:
 
-            await session.initialize()
+        await session.initialize()
 
-            result = await session.call_tool(
-                tool_name,
-                arguments
-            )
+        result = await session.call_tool(
+            tool_name,
+            arguments
+        )
 
-            text = "\n".join(
-                item.text
-                for item in result.content
-                if hasattr(item, "text")
-            )
+        text = "\n".join(
+            item.text
+            for item in result.content
+            if hasattr(item, "text")
+        )
 
-            if result.isError:
-                return f"Error: {text}"
+        if result.isError:
+            return f"{ERROR_PREFIX} {text}"
 
-            return text
+        return text
 
 
 def call_git_mcp(tool_name, arguments=None):
@@ -75,29 +73,25 @@ async def _call_filesystem_mcp(tool_name, arguments):
         args=[str(server_path)],
     )
 
-    async with stdio_client(params) as (
-        read_stream,
-        write_stream,
+    async with (
+        stdio_client(params) as (read_stream, write_stream),
+        ClientSession(read_stream, write_stream) as session,
     ):
-        async with ClientSession(
-            read_stream,
-            write_stream,
-        ) as session:
 
-            await session.initialize()
+        await session.initialize()
 
-            result = await session.call_tool(
-                tool_name,
-                arguments
-            )
+        result = await session.call_tool(
+            tool_name,
+            arguments
+        )
 
-            text = "\n".join(
-                item.text
-                for item in result.content
-                if hasattr(item, "text")
-            )
+        text = "\n".join(
+            item.text
+            for item in result.content
+            if hasattr(item, "text")
+        )
 
-            return text
+        return text
 
 
 def call_filesystem_mcp(
@@ -128,18 +122,20 @@ async def _call_github_mcp(tool_name, arguments):
         } if os.environ.get("GITHUB_TOKEN") else None,
     )
 
-    async with stdio_client(params) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            result = await session.call_tool(tool_name, arguments)
-            text = "\n".join(
-                item.text
-                for item in result.content
-                if hasattr(item, "text")
-            )
-            if result.isError:
-                return f"Error: {text}"
-            return text
+    async with (
+        stdio_client(params) as (read_stream, write_stream),
+        ClientSession(read_stream, write_stream) as session,
+    ):
+        await session.initialize()
+        result = await session.call_tool(tool_name, arguments)
+        text = "\n".join(
+            item.text
+            for item in result.content
+            if hasattr(item, "text")
+        )
+        if result.isError:
+            return f"{ERROR_PREFIX} {text}"
+        return text
 
 
 def call_github_mcp(tool_name, arguments=None):
@@ -215,13 +211,13 @@ def _suggest_commit_message(changes):
 
 def review_working_tree():
     raw_changes = call_git_mcp("git_changed_files")
-    if raw_changes.startswith("Error:"):
+    if raw_changes.startswith(ERROR_PREFIX):
         return {"error": raw_changes}
 
     try:
         changes = json.loads(raw_changes)
     except ValueError as error:
-        return {"error": f"Error: Could not parse changed files: {error}"}
+        return {"error": f"{ERROR_PREFIX} Could not parse changed files: {error}"}
 
     if not changes:
         return {
@@ -231,7 +227,7 @@ def review_working_tree():
         }
 
     diff_summary = call_git_mcp("git_diff")
-    if diff_summary.startswith("Error:"):
+    if diff_summary.startswith(ERROR_PREFIX):
         return {"error": diff_summary}
 
     message = _suggest_commit_message(changes)
@@ -263,13 +259,13 @@ def prepare_commit(changes, message):
         "git_stage_paths",
         {"paths": paths},
     )
-    if staged_summary.startswith("Error:"):
+    if staged_summary.startswith(ERROR_PREFIX):
         return {"error": staged_summary}
     if staged_summary == "(no changes were staged)":
         return {"error": "No changes were staged. Run 'review changes' again."}
 
     fingerprint = call_git_mcp("git_staged_fingerprint")
-    if fingerprint.startswith("Error:"):
+    if fingerprint.startswith(ERROR_PREFIX):
         rollback = call_git_mcp("git_unstage_paths", {"paths": paths})
         return {"error": f"{fingerprint}\nStaging rollback: {rollback}"}
 
@@ -308,19 +304,19 @@ def _review_github_changes():
         return review["error"]
 
     sync_output = call_git_mcp("git_sync_status")
-    if sync_output.startswith("Error:"):
+    if sync_output.startswith(ERROR_PREFIX):
         return sync_output
     try:
         status = json.loads(sync_output)
     except ValueError as error:
-        return f"Error: Could not read Git upstream status: {error}"
+        return f"{ERROR_PREFIX} Could not read Git upstream status: {error}"
 
     upstream = status.get("upstream")
     ahead = status.get("ahead")
     behind = status.get("behind")
     branch = status.get("branch")
     if not isinstance(ahead, int) or not isinstance(behind, int):
-        return "Error: Git upstream status returned invalid commit counts."
+        return f"{ERROR_PREFIX} Git upstream status returned invalid commit counts."
     if not upstream:
         guidance = (
             "No upstream branch is configured. Configure one and push manually, "

@@ -9,6 +9,8 @@ from mcp.server.fastmcp import FastMCP
 server = FastMCP("git-tools")
 
 ROOT_DIR = Path(__file__).resolve().parent
+ERROR_PREFIX = "Error:"
+STATUS_PORCELAIN_V1 = "--porcelain=v1"
 
 
 async def run_git_command(args: list[str]) -> str:
@@ -60,10 +62,9 @@ def _parse_changed_files(status_output: str) -> list[dict[str, str]]:
             "code": code,
             "path": path,
         }
-        if "R" in code or "C" in code:
-            if index < len(records):
-                change["original_path"] = records[index]
-                index += 1
+        if ("R" in code or "C" in code) and index < len(records):
+            change["original_path"] = records[index]
+            index += 1
         changed_files.append(change)
 
     return changed_files
@@ -93,7 +94,7 @@ async def _staged_paths() -> list[str] | None:
     output = await run_git_command(
         ["diff", "--cached", "--name-only", "--no-renames", "-z"]
     )
-    if output.startswith("Error:"):
+    if output.startswith(ERROR_PREFIX):
         return None
     return [path for path in output.split("\0") if path]
 
@@ -103,9 +104,9 @@ async def git_status() -> str:
     """Show a concise list of changed, added, deleted, and untracked files."""
 
     output = await run_git_command(
-        ["status", "--porcelain=v1", "-z"]
+        ["status", STATUS_PORCELAIN_V1, "-z"]
     )
-    if output.startswith("Error:"):
+    if output.startswith(ERROR_PREFIX):
         return output
 
     changes = _parse_changed_files(output)
@@ -188,7 +189,7 @@ async def git_diff(full: bool = False) -> str:
         args = ["diff", "--stat", "HEAD", "--"]
 
     output = await run_git_command(args)
-    if output.startswith("Error:"):
+    if output.startswith(ERROR_PREFIX):
         return output
     return output or "(no tracked changes)"
 
@@ -198,9 +199,9 @@ async def git_changed_files() -> str:
     """Return changed repository paths and status codes as JSON."""
 
     output = await run_git_command(
-        ["status", "--porcelain=v1", "-z"]
+        ["status", STATUS_PORCELAIN_V1, "-z"]
     )
-    if output.startswith("Error:"):
+    if output.startswith(ERROR_PREFIX):
         return output
     return json.dumps(_parse_changed_files(output), ensure_ascii=True)
 
@@ -214,9 +215,9 @@ async def git_stage_paths(paths: list[str]) -> str:
         return validation_error
 
     status_output = await run_git_command(
-        ["status", "--porcelain=v1", "-z"]
+        ["status", STATUS_PORCELAIN_V1, "-z"]
     )
-    if status_output.startswith("Error:"):
+    if status_output.startswith(ERROR_PREFIX):
         return status_output
 
     changed_files = _parse_changed_files(status_output)
@@ -241,13 +242,13 @@ async def git_stage_paths(paths: list[str]) -> str:
     result = await run_git_command(
         ["add", "-A", "--", *(_literal_pathspec(path) for path in paths)]
     )
-    if result.startswith("Error:"):
+    if result.startswith(ERROR_PREFIX):
         return result
 
     staged = await run_git_command(
         ["diff", "--cached", "--stat"]
     )
-    if staged.startswith("Error:"):
+    if staged.startswith(ERROR_PREFIX):
         return staged
     return staged or "(no changes were staged)"
 
@@ -271,7 +272,7 @@ async def git_unstage_paths(paths: list[str]) -> str:
     result = await run_git_command(
         ["restore", "--staged", "--", *(_literal_pathspec(path) for path in paths)]
     )
-    if result.startswith("Error:"):
+    if result.startswith(ERROR_PREFIX):
         return result
     return "Approved changes were unstaged; working files were left unchanged."
 
@@ -291,7 +292,7 @@ async def git_staged_fingerprint() -> str:
             "--",
         ]
     )
-    if staged_diff.startswith("Error:"):
+    if staged_diff.startswith(ERROR_PREFIX):
         return staged_diff
     return hashlib.sha256(staged_diff.encode("utf-8")).hexdigest()
 
@@ -321,7 +322,7 @@ async def git_commit(
         return "Error: staged changes include paths outside the approved review."
 
     current_diff_hash = await git_staged_fingerprint()
-    if current_diff_hash.startswith("Error:"):
+    if current_diff_hash.startswith(ERROR_PREFIX):
         return current_diff_hash
     if current_diff_hash != expected_diff_hash:
         return "Error: staged changes differ from the approved preview; review them again."
@@ -364,7 +365,7 @@ async def git_sync_status() -> str:
     output = await run_git_command(
         ["status", "--porcelain=v2", "--branch"]
     )
-    if output.startswith("Error:"):
+    if output.startswith(ERROR_PREFIX):
         return output
 
     status = {
