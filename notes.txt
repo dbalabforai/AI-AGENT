@@ -1,8 +1,0 @@
-Project Apollo
-
-Go Live Date: Dec 15
-
-Pending Tasks:
-- Create dashboard
-- Validate reports
-- User testing

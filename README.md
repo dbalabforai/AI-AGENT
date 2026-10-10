@@ -1,153 +1,146 @@
-# AI Agent
+# AI Developer Assistant
 
-A local command-line AI assistant for everyday project work. It combines Ollama chat with MCP tools for working with files, Git, and GitHub.
+A local Streamlit app that provides filesystem, Git, and GitHub tools through
+three local MCP (Model Context Protocol) servers. It runs on your computer;
+it is not a hosted service.
 
-> **Runs locally:** the chat model runs through Ollama on your machine. There is no hosted web app at this time.
+## Features
 
-## What you can do
+- Browse and read project files.
+- Check Git status, branches, history, and diffs.
+- Review working-tree changes and create a local commit after confirmation.
+- Read public GitHub repository information, files, and recent commits.
 
-- Ask the assistant questions and keep conversation history locally.
-- List, search, read, and write project files.
-- Analyze documents, summarize them, or extract action items.
-- Inspect Git status, history, branches, and diffs.
-- Review changes and prepare a commit preview before confirming a commit.
-- Fetch repository details, the README, file list, and recent commits from GitHub.
+## Requirements
 
-## Get started
+- Python 3.10 or newer
+- Git installed and available as a terminal command
+- Internet access for GitHub actions
+
+Ollama is not required. The MCP servers are launched automatically by the app
+as local subprocesses.
+
+## Quick start
 
 ### 1. Install prerequisites
 
-- Python 3.10 or newer
-- [Ollama](https://ollama.com/) installed and running
-- Git installed and available on `PATH`
+Install Python 3.10 or newer from [python.org](https://www.python.org/downloads/)
+and Git from [git-scm.com](https://git-scm.com/downloads).
 
-### 2. Download dependencies and the model
+In **Windows PowerShell**, verify the installations:
 
-From the repository directory, install the Python packages:
+1. py --version
+2. git --version
 
-```powershell
-py -m pip install mcp ollama
-```
+### 2A. Clone, install, and run — Windows
 
-Download the model used by the agent:
+In **Windows PowerShell**, run each command in order:
 
-```powershell
-ollama pull llama3.1
-```
+1. git clone https://github.com/dbalabforai/AI-AGENT.git
+2. cd AI-AGENT
+3. py -3 -m venv .venv
+4. .\.venv\Scripts\Activate.ps1
+5. python -m pip install --upgrade pip
+6. python -m pip install -r requirements.txt
+7. streamlit run app.py
 
-Make sure Ollama is running before starting the agent.
+### 2B. Clone, install, and run — macOS or Linux
 
-### 3. Start the agent
+In your **macOS or Linux terminal** (such as Terminal), run each command in
+order:
 
-```powershell
-py agent.py
-```
+1. git clone https://github.com/dbalabforai/AI-AGENT.git
+2. cd AI-AGENT
+3. python3 -m venv .venv
+4. source .venv/bin/activate
+5. python -m pip install --upgrade pip
+6. python -m pip install -r requirements.txt
+7. streamlit run app.py
 
-The command prompt displays the available commands. For example:
+Streamlit starts a local server and opens the app in your browser. Keep the
+terminal open while using the app; press **Ctrl+C** there to stop it.
 
-```text
-help
-list tools
-list files
-search project
-read notes.txt
-summarize meeting.txt
-git status
-github repo info
-github review changes
-review changes
-exit
-```
+### 3. Start the app again later
 
-Enter `help`, `list tools`, or `show tools` at any time to redisplay the full command menu.
+Open a terminal in the project folder and activate its environment before
+starting Streamlit. Do not clone the repository again.
 
-## Agent tools and MCP servers
+**Windows PowerShell:**
 
-The agent is a Python CLI client. It launches the MCP servers as local subprocesses and calls their tools when you enter a matching command.
+1. .\.venv\Scripts\Activate.ps1
+2. streamlit run app.py
 
-**MCP** (Model Context Protocol) is a standard way for an AI application to call tools provided by separate servers. In this project, each server exposes a focused set of capabilities:
+**macOS or Linux terminal:**
 
-| Server | What it provides |
-| --- | --- |
-| `mcp_server.py` (`local-files`) | Lists and searches project files, and reads or writes supported files. It excludes Python files and `memory.json`. |
-| `git_mcp_server.py` (`git-tools`) | Reports repository state and history, shows diffs, and stages or commits reviewed changes. |
-| `github_mcp_server.py` (`github-tools`) | Reads GitHub repository metadata, README content, the default-branch file list, and recent commits. |
+1. source .venv/bin/activate
+2. streamlit run app.py
 
-The local file and Git servers operate on the repository containing the project. GitHub tools are configured for `dbalabforai/AI-AGENT`.
+### If PowerShell blocks environment activation
 
-## Commands
+Use the virtual environment's Python directly from the project folder. These
+commands install the dependencies and start the app without activation:
 
-### Files
+1. .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+2. .\.venv\Scripts\python.exe -m streamlit run app.py
 
-| Command | Description |
-| --- | --- |
-| `list files` | List supported files in the project directory. |
-| `search <text>` | Find text in supported project files. |
-| `read <file>` | Display a file's contents. |
-| `write <file>: <content>` | Write text to a project file. |
-| `analyze <file>` | Identify purpose, key facts, dates, and open items. |
-| `summarize <file>` | Summarize a document in concise bullets. |
-| `extract_tasks <file>` | Extract action items from a document. |
+### Optional: GitHub authentication
 
-### Git
+The GitHub tools can read public repository data without a token. For
+authenticated requests, set GITHUB_TOKEN before starting the app.
 
-| Command | Description |
-| --- | --- |
-| `git status`, `git log`, `git branch` | Inspect repository state, recent commits, or the current branch. |
-| `git diff`, `git diff full` | View a compact change summary or full patch. |
-| `review changes` | Summarize working-tree changes and suggest a commit message. |
-| `commit changes` | Stage only the paths from the latest review and show a commit preview. Confirm with `yes` or cancel with `no`. This creates a local commit, not a push. |
+In **Windows PowerShell**, from the project folder:
 
-### GitHub
+1. $env:GITHUB_TOKEN = "your-token"
+2. streamlit run app.py
 
-| Command | Description |
-| --- | --- |
-| `github repo info` | Show basic repository metadata. |
-| `github readme` | Read the repository README. |
-| `github list files` | List files on the default branch. |
-| `github latest commits` | Show recent commits on the default branch. |
-| `github review changes` | Review local changes, suggest how to commit them, and report whether local commits are ahead of the configured remote. It does not commit, fetch, or push. |
+Keep your token private. Do not add it to source files or commit it.
 
-GitHub's public repository data can be read without a token. To authenticate API requests or access data requiring authentication, set `GITHUB_TOKEN` in the environment before launching the agent. Do not put the token in source code or commit it.
+## Commands in the app
 
-The remote status uses the local tracking information from the last `git fetch`; it does not contact GitHub or update remote-tracking branches. If changes need committing, use `review changes`, then `commit changes` and confirm with `yes`. The commit is local only. Run `github review changes` again afterward to see whether the branch is ahead and get the appropriate manual push command (for example, `git push origin main`). Nothing is pushed automatically.
+| Area | Command | What it does |
+| --- | --- | --- |
+| Files | list files | List supported files in the project folder. |
+| Files | read filename | Read a supported file, such as README.md. |
+| Git | git status | Show changed, added, and deleted files. |
+| Git | git log | Show recent commits. |
+| Git | git branch | Show the current branch. |
+| Git | git diff | Show a summary of tracked changes. |
+| Git | git diff full | Show the full tracked-change diff. |
+| Git | git remote | Show configured Git remotes. |
+| Git | git last commit | Show the latest commit. |
+| Git | review changes | Review changed paths and prepare a suggested commit message. |
+| Git | commit changes | Stage reviewed paths and display a commit preview. |
+| GitHub | github repo info | Show metadata for dbalabforai/AI-AGENT. |
+| GitHub | github readme | Read that repository's README. |
+| GitHub | github list files | List files on its default branch. |
+| GitHub | github latest commits | Show recent commits on its default branch. |
+| GitHub | github review changes | Review local changes and report local push guidance. |
 
-### Add, commit, and push workflow
+To commit, enter review changes, then commit changes, inspect the preview,
+and select **Confirm Commit**. This creates a local commit only; it does not
+push to GitHub. Select **Cancel Commit** to cancel.
 
-Use the agent's review and commit commands for the safest path:
+## MCP servers
 
-1. Run `review changes` to inspect the changed files and suggested commit message.
-2. Run `commit changes` to stage only those reviewed files and preview the commit.
-3. Reply `yes` to create the local commit, or `no` to cancel.
-4. Run `github review changes` to check whether local commits are ahead of the remote.
-5. If it displays a push command, run that command in a separate terminal opened in the repository (for example, `git push origin main`).
+MCP lets an application call tools exposed by separate servers. This app
+starts the following local servers automatically:
 
-If you prefer manual Git commands, run them in a separate terminal, not at the agent's chat prompt:
+| File | Server | Capabilities |
+| --- | --- | --- |
+| mcp_server.py | local-files | Lists, searches, reads, and writes supported project files. |
+| git_mcp_server.py | git-tools | Inspects Git and stages or commits reviewed changes. |
+| github_mcp_server.py | github-tools | Reads repository metadata and content from GitHub. |
 
-```powershell
-git status
-git add README.md agent.py
-git commit -m "Describe the change"
-git push origin main
-```
-
-Replace the example file names and commit message with the files and change you intend to publish. Use `git add .` only when you intend to stage every changed and untracked file. The agent does not execute raw `git add`, `git commit`, or `git push` commands entered as chat; it will say so rather than claiming the command succeeded.
+The filesystem server is restricted to this project folder and excludes
+Python files and memory.json from its file tools. The GitHub server is
+currently configured for dbalabforai/AI-AGENT.
 
 ## Project files
 
-- `agent.py` — interactive CLI and MCP client
-- `mcp_server.py` — local file tools
-- `git_mcp_server.py` — Git tools
-- `github_mcp_server.py` — GitHub tools
-- `test_mcp.py`, `test_git_mcp.py`, `test_github_mcp.py` — MCP server tool-listing smoke checks
-- `memory.json` — locally saved chat history; generated or updated when chatting
-
-## Safety notes
-
-- File tools are restricted to the project directory; they cannot access `memory.json` or `.py` files.
-- Git staging and commit operations are limited to reviewed, changed paths and require confirmation before committing.
-- Conversation history is stored locally in `memory.json`.
-
-## Current scope
-
-This project currently provides a local CLI, not a public website or hosted service. Anyone who wants to use it needs to install the prerequisites and run it on their own machine.
+- app.py — Streamlit user interface.
+- agent_core.py — Connects the interface to MCP servers and routes commands.
+- mcp_server.py — Local filesystem MCP server.
+- git_mcp_server.py — Git MCP server.
+- github_mcp_server.py — GitHub MCP server.
+- test_mcp.py, test_git_mcp.py, test_github_mcp.py — MCP server smoke checks.
+- requirements.txt — Python dependencies.
